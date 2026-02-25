@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev]
+
+jobs:
+  test:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pytest pytest-json-report
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run tests
+        id: tests
+        run: |
+          pytest --tb=short -q --json-report --json-report-file=report.json || true
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+
+      - name: Parse test results
+        id: results
+        if: always()
+        run: |
+          if [ -f report.json ]; then
+            PASSED=$(python -c "import json; r=json.load(open('report.json')); print(r['summary'].get('passed', 0))")
+            FAILED=$(python -c "import json; r=json.load(open('report.json')); print(r['summary'].get('failed', 0))")
+            TOTAL=$(python -c "import json; r=json.load(open('report.json')); print(r['summary'].get('total', 0))")
+            echo "passed=$PASSED" >> $GITHUB_OUTPUT
+            echo "failed=$FAILED" >> $GITHUB_OUTPUT
+            echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          else
+            echo "passed=0" >> $GITHUB_OUTPUT
+            echo "failed=0" >> $GITHUB_OUTPUT
+            echo "total=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Notify Slack (success)
+        if: success()
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          payload: |
+            {
+              "text": "✅ *CI 통과*",
+              "attachments": [{
+                "color": "good",
+                "fields": [
+                  {"title": "PR", "value": "<${{ github.event.pull_request.html_url }}|${{ github.event.pull_request.title }}>", "short": false},
+                  {"title": "브랜치", "value": "`${{ github.head_ref }}`", "short": true},
+                  {"title": "테스트", "value": "${{ steps.results.outputs.passed }}/${{ steps.results.outputs.total }} 통과", "short": true},
+                  {"title": "커밋", "value": "${{ github.event.pull_request.user.login }}", "short": true}
+                ]
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Notify Slack (failure)
+        if: failure()
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          payload: |
+            {
+              "text": "❌ *CI 실패*",
+              "attachments": [{
+                "color": "danger",
+                "fields": [
+                  {"title": "PR", "value": "<${{ github.event.pull_request.html_url }}|${{ github.event.pull_request.title }}>", "short": false},
+                  {"title": "브랜치", "value": "`${{ github.head_ref }}`", "short": true},
+                  {"title": "실패", "value": "${{ steps.results.outputs.failed }} 개", "short": true},
+                  {"title": "로그", "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Actions 로그 보기>", "short": false}
+                ]
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
