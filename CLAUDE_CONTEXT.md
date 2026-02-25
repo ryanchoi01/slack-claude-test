@@ -4,10 +4,12 @@
 Slack Claude Bot 테스트용 Python 프로젝트입니다.
 
 ## 코딩 컨벤션
-- Python 3.10+ 문법 사용
-- 함수에 타입 힌트 필수
-- 한국어 주석 사용
-- 함수명은 snake_case
+- Python 3.10+ syntax required
+- Type hints required on all functions
+- **All comments and docstrings must be in English**
+- **All variable/function/class names in English (snake_case)**
+- Commit messages in English (Conventional Commits format)
+- Branch names in English (kebab-case)
 
 ## 금지 사항
 - print() 디버깅 코드를 커밋하지 마세요
